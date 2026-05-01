@@ -1,0 +1,191 @@
+import { api } from "../api.js";
+import { el, esc, icons, toast, confirm } from "../ui.js";
+import { appHeader, bottomNav } from "../chrome.js";
+import { navigate } from "../router.js";
+import { pickExercise } from "../exercise_picker.js";
+
+export async function render(container, { id }) {
+  const view = el(`
+    <div class="screen has-bottom-nav">
+      <div id="header-slot"></div>
+      <div class="content">
+        <div id="meta" class="mb-4"></div>
+        <div id="exercises"></div>
+        <button class="btn btn-block mt-4" id="add-ex">${icons.plus}<span>Agregar ejercicio</span></button>
+        <button class="btn btn-primary btn-block mt-2" id="start">${icons.play}<span>Iniciar entrenamiento</span></button>
+        <button class="btn btn-ghost btn-block mt-4" id="del" style="color:var(--danger);">Eliminar rutina</button>
+      </div>
+    </div>
+  `);
+
+  const headerSlot = view.querySelector("#header-slot");
+  const back = el(`<button class="icon-btn">${icons.arrowLeft}</button>`);
+  back.addEventListener("click", () => navigate("/routines"));
+  headerSlot.appendChild(appHeader({ title: "Rutina", left: back }));
+  view.appendChild(bottomNav());
+  container.replaceChildren(view);
+
+  let routine = null;
+  const exercisesEl = view.querySelector("#exercises");
+  const metaEl = view.querySelector("#meta");
+
+  const refresh = async () => {
+    try {
+      routine = await api.getRoutine(id);
+    } catch (e) {
+      toast(e.detail || "No se pudo cargar", "error");
+      navigate("/routines");
+      return;
+    }
+    headerSlot.replaceChildren(appHeader({ title: routine.title, left: back }));
+    metaEl.innerHTML = `<div class="muted" style="font-size:13px;">${routine.exercises.length} ejercicios · ${countSets(routine)} series</div>`;
+
+    exercisesEl.innerHTML = "";
+    for (const re of routine.exercises) {
+      exercisesEl.appendChild(renderExerciseCard(re, refresh));
+    }
+    if (routine.exercises.length === 0) {
+      exercisesEl.innerHTML = `<div class="empty-state"><div class="em-title">Vacia</div><div>Agregá ejercicios para empezar</div></div>`;
+    }
+  };
+
+  view.querySelector("#add-ex").addEventListener("click", () => {
+    pickExercise(async (ex) => {
+      try {
+        const re = await api.addExerciseToRoutine(id, { exercise_id: ex.id, rest_seconds: 90 });
+        // agregar 3 sets default
+        for (let i = 0; i < 3; i++) {
+          await api.addRoutineSet(re.id, { target_kg: null, target_reps: 10 });
+        }
+        await refresh();
+      } catch (e) {
+        toast(e.detail || "No se pudo agregar", "error");
+      }
+    });
+  });
+
+  view.querySelector("#start").addEventListener("click", async () => {
+    if (!routine || routine.exercises.length === 0) {
+      toast("Agregá al menos un ejercicio", "error");
+      return;
+    }
+    try {
+      const session = await api.startSession({ routine_id: routine.id });
+      navigate(`/workout/${session.id}`);
+    } catch (e) {
+      toast(e.detail || "No se pudo iniciar", "error");
+    }
+  });
+
+  view.querySelector("#del").addEventListener("click", async () => {
+    if (!await confirm("¿Eliminar esta rutina?")) return;
+    try {
+      await api.deleteRoutine(id);
+      toast("Rutina eliminada", "success");
+      navigate("/routines");
+    } catch (e) {
+      toast(e.detail || "Error", "error");
+    }
+  });
+
+  await refresh();
+}
+
+function countSets(routine) {
+  return routine.exercises.reduce((acc, re) => acc + re.sets.length, 0);
+}
+
+function renderExerciseCard(re, refresh) {
+  const card = el(`
+    <div class="card">
+      <div class="card-header">
+        <div class="ex-icon">${icons.dumbbell}</div>
+        <div class="title">${esc(re.exercise.name)}</div>
+        <button class="icon-btn" data-action="remove">${icons.trash}</button>
+      </div>
+
+      <div class="sets">
+        <div class="sets-head">
+          <div>SET</div>
+          <div></div>
+          <div>KG</div>
+          <div>REPS</div>
+          <div></div>
+        </div>
+        <div class="rows"></div>
+      </div>
+      <button class="add-set">${icons.plus}<span>Agregar serie</span></button>
+    </div>
+  `);
+
+  const rows = card.querySelector(".rows");
+  for (const s of re.sets) {
+    rows.appendChild(renderRoutineSetRow(s, refresh));
+  }
+
+  card.querySelector(".add-set").addEventListener("click", async () => {
+    try {
+      const last = re.sets[re.sets.length - 1];
+      await api.addRoutineSet(re.id, {
+        target_kg: last?.target_kg ?? null,
+        target_reps: last?.target_reps ?? 10,
+      });
+      await refresh();
+    } catch (e) {
+      toast(e.detail || "Error", "error");
+    }
+  });
+
+  card.querySelector('[data-action="remove"]').addEventListener("click", async () => {
+    if (!await confirm(`¿Quitar ${re.exercise.name}?`)) return;
+    try {
+      await api.removeRoutineExercise(re.id);
+      await refresh();
+    } catch (e) {
+      toast(e.detail || "Error", "error");
+    }
+  });
+
+  return card;
+}
+
+function renderRoutineSetRow(s, refresh) {
+  const row = el(`
+    <div class="set-row">
+      <div class="num">${s.set_number}</div>
+      <div class="prev empty"></div>
+      <div><input class="set-input" type="number" inputmode="decimal" step="0.5" value="${s.target_kg ?? ''}" data-field="kg"></div>
+      <div><input class="set-input" type="number" inputmode="numeric" value="${s.target_reps ?? ''}" data-field="reps"></div>
+      <button class="icon-btn" style="width:32px;height:32px;color:var(--text-faint);" data-del>${icons.close}</button>
+    </div>
+  `);
+
+  const kgIn = row.querySelector('[data-field="kg"]');
+  const repsIn = row.querySelector('[data-field="reps"]');
+
+  const persist = async () => {
+    const payload = {
+      target_kg: kgIn.value === "" ? null : parseFloat(kgIn.value),
+      target_reps: repsIn.value === "" ? null : parseInt(repsIn.value),
+    };
+    try {
+      await api.updateRoutineSet(s.id, payload);
+    } catch (e) {
+      toast(e.detail || "Error guardando", "error");
+    }
+  };
+
+  kgIn.addEventListener("blur", persist);
+  repsIn.addEventListener("blur", persist);
+
+  row.querySelector("[data-del]").addEventListener("click", async () => {
+    try {
+      await api.deleteRoutineSet(s.id);
+      await refresh();
+    } catch (e) {
+      toast(e.detail || "Error", "error");
+    }
+  });
+
+  return row;
+}

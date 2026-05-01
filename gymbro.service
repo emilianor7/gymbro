@@ -1,0 +1,18 @@
+[Unit]
+Description=GymBro API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=emiliano
+WorkingDirectory=/home/emiliano/gymbro
+Environment="PATH=/home/emiliano/gymbro/.venv/bin"
+ExecStart=/home/emiliano/gymbro/.venv/bin/python run.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
