@@ -105,6 +105,8 @@ export const api = {
   discardSession: (id) => request("DELETE", `/sessions/${id}`),
 
   addSessionExercise: (sessionId, data) => request("POST", `/sessions/${sessionId}/exercises`, data),
+  deleteSessionExercise: (seId) => request("DELETE", `/sessions/exercises/${seId}`),
+  patchSessionExercise: (seId, data) => request("PATCH", `/sessions/exercises/${seId}`, data),
   addSessionSet: (seId, data) => request("POST", `/sessions/exercises/${seId}/sets`, data),
   logSet: (setId, data) => request("PATCH", `/sessions/sets/${setId}`, data),
   deleteSessionSet: (setId) => request("DELETE", `/sessions/sets/${setId}`),

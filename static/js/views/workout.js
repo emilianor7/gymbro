@@ -71,6 +71,72 @@ function showRestPicker(currentSecs, onSelect) {
 }
 
 // ============================================================
+// REORDER SHEET
+// ============================================================
+function showReorderSheet(exercises, refresh) {
+  const items = exercises.map(se => ({ id: se.id, name: se.exercise.name }));
+
+  const renderList = () => items.map((item, idx) => `
+    <div class="list-item" data-idx="${idx}" style="display:flex;align-items:center;gap:12px;padding:12px 16px;">
+      <span style="flex:1;font-size:15px;">${esc(item.name)}</span>
+      <button class="icon-btn move-up" data-idx="${idx}" style="opacity:${idx===0?'0.3':'1'}">▲</button>
+      <button class="icon-btn move-dn" data-idx="${idx}" style="opacity:${idx===items.length-1?'0.3':'1'}">▼</button>
+    </div>
+  `).join("");
+
+  const ov = el(`
+    <div class="sheet-overlay">
+      <div class="sheet" style="padding:8px 0 16px;">
+        <div style="width:36px;height:4px;background:var(--border);border-radius:2px;margin:8px auto 12px;"></div>
+        <div style="font-weight:600;font-size:15px;padding:0 16px 12px;">Reordenar ejercicios</div>
+        <div id="reorder-list">${renderList()}</div>
+        <div style="padding:12px 16px 0;display:flex;gap:8px;">
+          <button class="btn btn-ghost btn-block" id="cancel-reorder">Cancelar</button>
+          <button class="btn btn-primary btn-block" id="save-reorder">Guardar</button>
+        </div>
+      </div>
+    </div>
+  `);
+
+  const listEl = ov.querySelector("#reorder-list");
+
+  const rebind = () => {
+    listEl.innerHTML = renderList();
+    listEl.querySelectorAll(".move-up").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const i = parseInt(btn.dataset.idx);
+        if (i === 0) return;
+        [items[i-1], items[i]] = [items[i], items[i-1]];
+        rebind();
+      });
+    });
+    listEl.querySelectorAll(".move-dn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const i = parseInt(btn.dataset.idx);
+        if (i === items.length-1) return;
+        [items[i], items[i+1]] = [items[i+1], items[i]];
+        rebind();
+      });
+    });
+  };
+  rebind();
+
+  ov.querySelector("#cancel-reorder").addEventListener("click", () => ov.remove());
+  ov.querySelector("#save-reorder").addEventListener("click", async () => {
+    ov.remove();
+    try {
+      await Promise.all(items.map((item, idx) =>
+        api.patchSessionExercise(item.id, { order_index: idx })
+      ));
+      await refresh();
+    } catch(e) { toast("Error al reordenar","error"); }
+  });
+
+  ov.addEventListener("click", e => { if (e.target===ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+
+// ============================================================
 // VISTA PRINCIPAL
 // ============================================================
 export async function render(container, { id }) {
@@ -125,7 +191,7 @@ export async function render(container, { id }) {
     await loadHistory(session.exercises);
     exercisesEl.innerHTML = "";
     for (const se of session.exercises)
-      exercisesEl.appendChild(renderExercise(se, refresh, historyCache, prCache, restConfig, notesCache));
+      exercisesEl.appendChild(renderExercise(se, refresh, historyCache, prCache, restConfig, notesCache, session));
     if (!session.exercises.length)
       exercisesEl.innerHTML = `<div class="empty-state"><div class="em-title">Sin ejercicios</div><div>Agregá uno para empezar</div></div>`;
   };
@@ -181,7 +247,7 @@ export async function render(container, { id }) {
 // ============================================================
 // CARD DE EJERCICIO
 // ============================================================
-function renderExercise(se, refresh, historyCache, prCache, restConfig, notesCache) {
+function renderExercise(se, refresh, historyCache, prCache, restConfig, notesCache, session) {
   const prevMap = historyCache.get(se.exercise.id)||{};
   const bestKg = prCache.get(se.exercise.id)||0;
   const restSecs = restConfig.get(se.id)||0;
@@ -194,7 +260,7 @@ function renderExercise(se, refresh, historyCache, prCache, restConfig, notesCac
       <div class="card-header">
         <div class="ex-icon">${icons.dumbbell}</div>
         <div class="title">${esc(se.exercise.name)}</div>
-        <button class="icon-btn">${icons.dots}</button>
+        <button class="icon-btn dots-btn">${icons.dots}</button>
       </div>
       <div class="rest-row" style="cursor:pointer;">${icons.timer}<span class="rest-label">Descanso: ${fmtRest(restSecs)}</span></div>
       <textarea class="ex-note-input" placeholder="Agregar notas aqui...">${esc(note)}</textarea>
@@ -239,6 +305,60 @@ function renderExercise(se, refresh, historyCache, prCache, restConfig, notesCac
     } catch(e) { toast(e.detail||"Error","error"); }
   });
 
+  // menu 3 puntos
+  card.querySelector(".dots-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    const ov = el(`
+      <div class="sheet-overlay">
+        <div class="sheet" style="padding:8px 0 16px;">
+          <div style="width:36px;height:4px;background:var(--border);border-radius:2px;margin:8px auto 16px;"></div>
+          <button class="dots-opt" data-action="reorder" style="display:flex;align-items:center;gap:14px;width:100%;border:0;background:none;padding:14px 20px;cursor:pointer;font-size:15px;color:var(--text);">
+            <span style="font-size:18px;width:24px;text-align:center;">↕</span> Reordenar ejercicios
+          </button>
+          <button class="dots-opt" data-action="replace" style="display:flex;align-items:center;gap:14px;width:100%;border:0;background:none;padding:14px 20px;cursor:pointer;font-size:15px;color:var(--text);">
+            <span style="font-size:18px;width:24px;text-align:center;">🔄</span> Reemplazar ejercicio
+          </button>
+          <button class="dots-opt" data-action="remove" style="display:flex;align-items:center;gap:14px;width:100%;border:0;background:none;padding:14px 20px;cursor:pointer;font-size:15px;color:var(--danger);">
+            <span style="font-size:18px;width:24px;text-align:center;">🗑️</span> Eliminar ejercicio
+          </button>
+        </div>
+      </div>
+    `);
+
+    ov.addEventListener("click", ev => { if (ev.target === ov) ov.remove(); });
+
+    ov.querySelectorAll(".dots-opt").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        ov.remove();
+        const action = btn.dataset.action;
+
+        if (action === "remove") {
+          if (!await confirm(`¿Eliminar ${se.exercise.name}?`)) return;
+          try {
+            await api.deleteSessionExercise(se.id);
+            await refresh();
+          } catch(e) { toast(e.detail||"Error al eliminar","error"); }
+
+        } else if (action === "replace") {
+          pickExercise(async ex => {
+            try {
+              const newSe = await api.addSessionExercise(session.id, {exercise_id: ex.id});
+              await api.addSessionSet(newSe.id, {kg: null, reps: null});
+              await api.patchSessionExercise(newSe.id, {order_index: se.order_index ?? 0});
+              await api.deleteSessionExercise(se.id);
+              await refresh();
+            } catch(e) { toast(e.detail||"Error al reemplazar","error"); }
+          });
+
+        } else if (action === "reorder") {
+          showReorderSheet(session.exercises, refresh);
+        }
+      });
+    });
+
+    document.body.appendChild(ov);
+  });
+
   return card;
 }
 
@@ -250,7 +370,6 @@ function renderSetRow(s, prevText, refresh, isPR, seId, restConfig) {
   const numDisplay = isPR ? "🥇" : (completed ? "✓" : s.set_number);
   const numColor = completed && !isPR ? "var(--accent)" : "var(--text)";
 
-  // si el set no fue completado, mostrar vacio con placeholder del target
   const kgVal = s.completed ? (s.kg ?? '') : '';
   const repsVal = s.completed ? (s.reps ?? '') : '';
   const kgPlaceholder = (!s.completed && s.kg) ? s.kg : '';
@@ -298,7 +417,6 @@ function renderSetRow(s, prevText, refresh, isPR, seId, restConfig) {
   };
   checkBtn.addEventListener("click", doToggle);
 
-  // long press en el numero -> eliminar
   let longPressTimer = null;
   numEl.addEventListener("touchstart", () => {
     longPressTimer = setTimeout(async () => {
@@ -310,7 +428,6 @@ function renderSetRow(s, prevText, refresh, isPR, seId, restConfig) {
   }, {passive:true});
   numEl.addEventListener("touchend", () => clearTimeout(longPressTimer));
   numEl.addEventListener("touchmove", () => clearTimeout(longPressTimer));
-  // click normal en numero = toggle (desktop)
   numEl.addEventListener("click", doToggle);
 
   return row;

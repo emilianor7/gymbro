@@ -92,6 +92,8 @@ def get_session(db: Session, session_id: int, user_id: int, *, with_details: boo
         raise NotFoundError(f"session {session_id} no encontrada")
     if ws.user_id != user_id:
         raise PermissionDeniedError("session no pertenece al user")
+    if with_details:
+        ws.exercises.sort(key=lambda se: se.order_index)
     return ws
 
 
