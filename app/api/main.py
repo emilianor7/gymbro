@@ -7,7 +7,8 @@ from pathlib import Path
 from ..config import CORS_ORIGINS
 from ..database import init_db
 from ..exceptions import NotFoundError, PermissionDeniedError, ValidationError, ConflictError
-from .routers import auth, exercises, routines, sessions
+from .routers import auth, exercises, routines
+from .routers.sessions_router import router as sessions_router
 from .routers.stats import router as stats_router
 from ..ai.router import router as ai_router
 
@@ -62,7 +63,7 @@ async def conflict_handler(request: Request, exc: ConflictError):
 app.include_router(auth.router)
 app.include_router(exercises.router)
 app.include_router(routines.router)
-app.include_router(sessions.router)
+app.include_router(sessions_router)
 app.include_router(stats_router)
 app.include_router(ai_router)
 
