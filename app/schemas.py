@@ -78,6 +78,7 @@ class RoutineOut(BaseModel):
     id: int
     title: str
     notes: Optional[str] = None
+    folder_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
