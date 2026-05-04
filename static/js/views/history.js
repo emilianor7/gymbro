@@ -28,16 +28,33 @@ export async function render(container) {
     // sesion activa destacada
     const activeEl = view.querySelector("#active");
     if (active) {
+      const activeDetail = await api.getSession(active.id);
+      const isEmpty = !activeDetail.exercises || activeDetail.exercises.length === 0;
+
       const card = el(`
-        <a href="#/workout/${active.id}" class="list-item" style="background:var(--accent-bg);border:1px solid var(--accent);margin-bottom:12px;">
-          <div class="ex-icon" style="background:var(--accent);color:#fff;">${icons.play}</div>
+        <a href="${isEmpty ? '#' : '#/workout/' + active.id}" class="list-item" style="background:var(--accent-bg);border:1px solid var(--accent);margin-bottom:12px;">
+          <div class="ex-icon" style="background:var(--accent);color:#fff;">${isEmpty ? '⚠️' : icons.play}</div>
           <div class="body">
             <div class="title" style="color:var(--accent);">${esc(active.title)}</div>
-            <div class="meta">En curso · iniciado ${fmtRelativeLocal(active.started_at)}</div>
+            <div class="meta">${isEmpty ? 'Entrenamiento vacio - toca para descartar' : 'En curso · iniciado ' + fmtRelativeLocal(active.started_at)}</div>
           </div>
           <div class="arrow">${icons.chevronRight}</div>
         </a>
       `);
+
+      if (isEmpty) {
+        card.addEventListener("click", async (e) => {
+          e.preventDefault();
+          if (await confirm("Este entrenamiento esta vacio. ¿Descartarlo?")) {
+            try {
+              await api.discardSession(active.id);
+              toast("Descartado", "success");
+              await render(container);
+            } catch { toast("Error", "error"); }
+          }
+        });
+      }
+
       activeEl.appendChild(card);
     }
 

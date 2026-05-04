@@ -70,6 +70,26 @@ export async function render(container, { id }) {
       return;
     }
     try {
+      // verificar sesion activa de esta rutina
+      const activeSessions = await api.listSessions({ limit: 5 });
+      const activeOfThisRoutine = activeSessions.find(
+        s => !s.finished_at && s.routine_id === routine.id
+      );
+
+      if (activeOfThisRoutine) {
+        const continuar = await confirm(
+          `Ya tenes un entrenamiento de "${routine.title}" en curso. ¿Continuar ese entrenamiento?`
+        );
+        if (continuar) {
+          navigate(`/workout/${activeOfThisRoutine.id}`);
+        } else {
+          await api.discardSession(activeOfThisRoutine.id);
+          const session = await api.startSession({ routine_id: routine.id });
+          navigate(`/workout/${session.id}`);
+        }
+        return;
+      }
+
       const session = await api.startSession({ routine_id: routine.id });
       navigate(`/workout/${session.id}`);
     } catch (e) {

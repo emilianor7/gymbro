@@ -59,6 +59,27 @@ export async function render(container) {
       `);
       item.querySelector("[data-start]").addEventListener("click", async () => {
         try {
+          // verificar si ya hay sesion activa de esta rutina
+          const activeSessions = await api.listSessions({ limit: 5 });
+          const activeOfThisRoutine = activeSessions.find(
+            s => !s.finished_at && s.routine_id === r.id
+          );
+
+          if (activeOfThisRoutine) {
+            const continuar = await confirm(
+              `Ya tenes un entrenamiento de "${r.title}" en curso. ¿Continuar ese entrenamiento?`
+            );
+            if (continuar) {
+              navigate(`/workout/${activeOfThisRoutine.id}`);
+            } else {
+              // descartar el activo y crear uno nuevo
+              await api.discardSession(activeOfThisRoutine.id);
+              const session = await api.startSession({ routine_id: r.id });
+              navigate(`/workout/${session.id}`);
+            }
+            return;
+          }
+
           const session = await api.startSession({ routine_id: r.id });
           navigate(`/workout/${session.id}`);
         } catch (e) {
