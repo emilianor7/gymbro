@@ -76,6 +76,7 @@ export const api = {
     ).toString();
     return request("GET", `/exercises${qs ? "?" + qs : ""}`);
   },
+  getExercise: (id) => request("GET", `/exercises/${id}`),
   createExercise: (data) => request("POST", "/exercises", data),
 
   // routines

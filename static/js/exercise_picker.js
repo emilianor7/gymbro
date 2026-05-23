@@ -1,5 +1,5 @@
 import { api } from "./api.js";
-import { el, esc, sheet, debounce, toast, icons } from "./ui.js";
+import { el, esc, sheet, debounce, toast, icons, MUSCLE_LABEL } from "./ui.js";
 
 const MUSCLES = [
   "chest","back","shoulders","biceps","triceps","forearms",
@@ -17,6 +17,7 @@ export async function pickExercise(onPick) {
       <div style="margin:0 0 10px;">
         <button class="btn btn-block" id="create-ex">${icons.plus}<span>Crear ejercicio nuevo</span></button>
       </div>
+      <div class="muscle-chips" style="display:flex;gap:6px;overflow-x:auto;margin:0 -16px 10px;padding:0 16px 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch;"></div>
       <div class="sheet-search" style="margin:0 0 12px;">
         <input type="text" id="search" placeholder="Buscar ejercicio..." autocomplete="off" autocapitalize="none">
       </div>
@@ -27,8 +28,38 @@ export async function pickExercise(onPick) {
   const s = sheet({ title: "Agregar ejercicio", body });
   const searchInput = body.querySelector("#search");
   const resultsEl = body.querySelector("#results");
+  const chipsEl = body.querySelector(".muscle-chips");
 
   let allExercises = [];
+  let activeMuscle = "";  // "" = todos
+
+  const chipStyle = (active) => `
+    flex:0 0 auto;padding:6px 12px;border-radius:999px;font-size:13px;cursor:pointer;
+    border:1px solid ${active ? "var(--accent)" : "var(--border)"};
+    background:${active ? "var(--accent)" : "transparent"};
+    color:${active ? "var(--bg)" : "var(--text-muted)"};
+    white-space:nowrap;font-weight:${active ? "600" : "500"};
+  `.replace(/\s+/g, " ");
+
+  const renderChips = () => {
+    const presentMuscles = [...new Set(allExercises.map(e => e.primary_muscle))].sort(
+      (a, b) => (MUSCLE_LABEL[a] || a).localeCompare(MUSCLE_LABEL[b] || b)
+    );
+    chipsEl.innerHTML = "";
+    const all = el(`<button data-muscle="" style="${chipStyle(activeMuscle === "")}">Todos</button>`);
+    chipsEl.appendChild(all);
+    for (const m of presentMuscles) {
+      const b = el(`<button data-muscle="${esc(m)}" style="${chipStyle(activeMuscle === m)}">${esc(MUSCLE_LABEL[m] || m)}</button>`);
+      chipsEl.appendChild(b);
+    }
+    chipsEl.querySelectorAll("button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        activeMuscle = btn.dataset.muscle;
+        renderChips();
+        applyFilters();
+      });
+    });
+  };
 
   const renderList = (items) => {
     if (items.length === 0) {
@@ -37,14 +68,16 @@ export async function pickExercise(onPick) {
     }
     resultsEl.innerHTML = "";
     for (const ex of items) {
+      const thumb = ex.image_path
+        ? `<img src="${esc(ex.image_path)}" loading="lazy" alt="" style="width:48px;height:48px;border-radius:8px;object-fit:cover;background:var(--bg-elev-2);">`
+        : `<div class="ex-icon" style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:var(--bg-elev-2);">${icons.dumbbell}</div>`;
+      const muscleEs = MUSCLE_LABEL[ex.primary_muscle] || ex.primary_muscle;
       const item = el(`
-        <button class="list-item" style="width:100%;text-align:left;border:0;">
-          <div class="card-header" style="padding:0;">
-            <div class="ex-icon">${icons.dumbbell}</div>
-          </div>
-          <div class="body">
+        <button class="list-item" style="width:100%;text-align:left;border:0;display:flex;align-items:center;gap:12px;">
+          ${thumb}
+          <div class="body" style="flex:1;min-width:0;">
             <div class="title" style="color:var(--text);font-size:14.5px;">${esc(ex.name)}</div>
-            <div class="meta">${esc(ex.primary_muscle)} · ${esc(ex.equipment)}${ex.is_custom ? " · custom" : ""}</div>
+            <div class="meta">${esc(muscleEs)} · ${esc(ex.equipment)}${ex.is_custom ? " · custom" : ""}</div>
           </div>
         </button>
       `);
@@ -53,18 +86,21 @@ export async function pickExercise(onPick) {
     }
   };
 
-  const filter = (q) => {
-    const term = q.trim().toLowerCase();
-    if (!term) return renderList(allExercises);
-    renderList(allExercises.filter(e => e.name.toLowerCase().includes(term)));
+  const applyFilters = () => {
+    const term = searchInput.value.trim().toLowerCase();
+    let items = allExercises;
+    if (activeMuscle) items = items.filter(e => e.primary_muscle === activeMuscle);
+    if (term) items = items.filter(e => e.name.toLowerCase().includes(term));
+    renderList(items);
   };
 
-  searchInput.addEventListener("input", debounce(() => filter(searchInput.value), 100));
+  searchInput.addEventListener("input", debounce(applyFilters, 100));
 
   // cargar lista
   const loadList = async () => {
     try {
       allExercises = await api.listExercises({ limit: 500 });
+      renderChips();
       renderList(allExercises);
       searchInput.focus();
     } catch (e) {
@@ -78,7 +114,8 @@ export async function pickExercise(onPick) {
     showCreateForm(s.body, async (newEx) => {
       // recarga la lista y selecciona el nuevo
       allExercises = await api.listExercises({ limit: 500 });
-      renderList(allExercises);
+      renderChips();
+      applyFilters();
       s.close();
       onPick(newEx);
     });

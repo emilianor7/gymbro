@@ -129,6 +129,43 @@ export function fmtDuration(start, end) {
   return `${secs}s`;
 }
 
+export const MUSCLE_LABEL = {
+  chest: "Pecho",
+  back: "Espalda",
+  shoulders: "Hombros",
+  biceps: "Bíceps",
+  triceps: "Tríceps",
+  forearms: "Antebrazos",
+  quadriceps: "Cuádriceps",
+  hamstrings: "Femoral",
+  glutes: "Glúteos",
+  calves: "Gemelos",
+  abdominals: "Abdomen",
+  obliques: "Oblicuos",
+  lower_back: "Lumbar",
+  traps: "Trapecio",
+  lats: "Dorsal",
+  neck: "Cuello",
+  full_body: "Full body",
+  cardio: "Cardio",
+  other: "Otro",
+};
+
+export const EQUIPMENT_LABEL = {
+  barbell: "Barra",
+  dumbbell: "Mancuernas",
+  machine: "Máquina",
+  cable: "Polea",
+  smith: "Smith",
+  bodyweight: "Peso corporal",
+  kettlebell: "Kettlebell",
+  band: "Banda",
+  plate: "Disco",
+  ez_bar: "Barra Z",
+  trx: "TRX",
+  other: "Otro",
+};
+
 // SVG icons inline (mejor que dep externa)
 export const icons = {
   close: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M6 18L18 6"/></svg>`,

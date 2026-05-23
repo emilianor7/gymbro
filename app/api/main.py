@@ -79,7 +79,15 @@ def health():
 # Static / SPA
 # ============================================================
 if STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    # StaticFiles que fuerza revalidacion via ETag en cada request,
+    # asi cambios en JS/CSS se ven sin cache stale.
+    class NoCacheStaticFiles(StaticFiles):
+        async def get_response(self, path, scope):
+            resp = await super().get_response(path, scope)
+            resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+            return resp
+
+    app.mount("/static", NoCacheStaticFiles(directory=STATIC_DIR), name="static")
 
     @app.get("/", include_in_schema=False)
     def root():

@@ -172,6 +172,7 @@ export async function render(container, { id }) {
   let prCache = new Map();
   let restConfig = new Map();
   let notesCache = new Map();
+  const techniqueOpen = new Map();  // se.id -> bool (estado del expandible por ejercicio)
 
   const exercisesEl = view.querySelector("#exercises");
   const statTime = view.querySelector("#stat-time");
@@ -202,9 +203,17 @@ export async function render(container, { id }) {
     statVol.textContent = `${vol.toFixed(0)} kg`;
     statSets.textContent = comp;
     await loadHistory(session.exercises);
+    // Auto-open de "Ver técnica" en el primer ejercicio activo (con image y sin sets completados)
+    // solo si nunca lo abrieron/cerraron manualmente.
+    const firstActive = session.exercises.find(se =>
+      se.exercise.image_path && !se.sets.some(s => s.completed)
+    );
+    if (firstActive && !techniqueOpen.has(firstActive.id)) {
+      techniqueOpen.set(firstActive.id, true);
+    }
     exercisesEl.innerHTML = "";
     for (const se of session.exercises)
-      exercisesEl.appendChild(renderExercise(se, refresh, historyCache, prCache, restConfig, notesCache, session));
+      exercisesEl.appendChild(renderExercise(se, refresh, historyCache, prCache, restConfig, notesCache, session, techniqueOpen));
     if (!session.exercises.length)
       exercisesEl.innerHTML = `<div class="empty-state"><div class="em-title">Sin ejercicios</div><div>Agregá uno para empezar</div></div>`;
   };
@@ -265,13 +274,28 @@ export async function render(container, { id }) {
 // ============================================================
 // CARD DE EJERCICIO
 // ============================================================
-function renderExercise(se, refresh, historyCache, prCache, restConfig, notesCache, session) {
+function renderExercise(se, refresh, historyCache, prCache, restConfig, notesCache, session, techniqueOpen) {
   const prevMap = historyCache.get(se.exercise.id)||{};
   const bestE1rm = prCache.get(se.exercise.id)||0;
   const restSecs = restConfig.get(se.id)||0;
   const note = notesCache.get(se.id) ?? (se.note||"");
+  const hasImage = !!se.exercise.image_path;
+  const techOpen = techniqueOpen?.get(se.id) ?? false;
 
   const fmtRest = s => s===0?"APAGADO":s>=60?`${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`:`${s}s`;
+
+  const techniqueBlock = hasImage ? `
+    <div class="technique-section">
+      <button class="technique-toggle" style="display:flex;align-items:center;gap:8px;background:none;border:0;color:var(--text-muted);font-size:13px;padding:6px 0;cursor:pointer;">
+        <span class="tech-caret" style="display:inline-block;transition:transform .15s;${techOpen?'transform:rotate(180deg);':''}">▾</span>
+        <span class="tech-label">${techOpen ? 'Ocultar técnica' : 'Ver técnica'}</span>
+      </button>
+      <div class="technique-body" style="${techOpen ? '' : 'display:none;'}max-width:280px;margin:6px 0 10px;">
+        <img src="${esc(se.exercise.image_path)}" loading="lazy" alt=""
+          style="width:100%;aspect-ratio:1;border-radius:var(--radius);object-fit:cover;background:var(--bg-elev-2);display:block;">
+      </div>
+    </div>
+  ` : "";
 
   const card = el(`
     <div class="card">
@@ -280,6 +304,7 @@ function renderExercise(se, refresh, historyCache, prCache, restConfig, notesCac
         <div class="title">${esc(se.exercise.name)}</div>
         <button class="icon-btn dots-btn">${icons.dots}</button>
       </div>
+      ${techniqueBlock}
       <div class="rest-row" style="cursor:pointer;">${icons.timer}<span class="rest-label">Descanso: ${fmtRest(restSecs)}</span></div>
       <textarea class="ex-note-input" placeholder="Agregar notas aqui...">${esc(note)}</textarea>
       <div class="sets">
@@ -321,6 +346,20 @@ function renderExercise(se, refresh, historyCache, prCache, restConfig, notesCac
     rows.appendChild(renderSetRow(s, prevMap[s.set_number], refresh, isPR, se.id, restConfig));
   }
 
+  if (hasImage) {
+    const toggle = card.querySelector(".technique-toggle");
+    const body = card.querySelector(".technique-body");
+    const caret = card.querySelector(".tech-caret");
+    const label = card.querySelector(".tech-label");
+    toggle.addEventListener("click", () => {
+      const nowOpen = body.style.display === "none";
+      body.style.display = nowOpen ? "" : "none";
+      caret.style.transform = nowOpen ? "rotate(180deg)" : "";
+      label.textContent = nowOpen ? "Ocultar técnica" : "Ver técnica";
+      techniqueOpen?.set(se.id, nowOpen);
+    });
+  }
+
   card.querySelector(".rest-row").addEventListener("click", () => {
     showRestPicker(restConfig.get(se.id)||0, val => {
       restConfig.set(se.id, val);
@@ -343,6 +382,9 @@ function renderExercise(se, refresh, historyCache, prCache, restConfig, notesCac
       <div class="sheet-overlay">
         <div class="sheet" style="padding:8px 0 16px;">
           <div style="width:36px;height:4px;background:var(--border);border-radius:2px;margin:8px auto 16px;"></div>
+          <button class="dots-opt" data-action="detail" style="display:flex;align-items:center;gap:14px;width:100%;border:0;background:none;padding:14px 20px;cursor:pointer;font-size:15px;color:var(--text);">
+            <span style="font-size:18px;width:24px;text-align:center;">ⓘ</span> Ver detalle del ejercicio
+          </button>
           <button class="dots-opt" data-action="reorder" style="display:flex;align-items:center;gap:14px;width:100%;border:0;background:none;padding:14px 20px;cursor:pointer;font-size:15px;color:var(--text);">
             <span style="font-size:18px;width:24px;text-align:center;">↕</span> Reordenar ejercicios
           </button>
@@ -363,7 +405,10 @@ function renderExercise(se, refresh, historyCache, prCache, restConfig, notesCac
         ov.remove();
         const action = btn.dataset.action;
 
-        if (action === "remove") {
+        if (action === "detail") {
+          navigate(`/exercise/${se.exercise.id}`);
+
+        } else if (action === "remove") {
           if (!await confirm(`¿Eliminar ${se.exercise.name}?`)) return;
           try {
             await api.deleteSessionExercise(se.id);
