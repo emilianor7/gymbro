@@ -190,3 +190,17 @@ class SessionSet(SQLModel, table=True):
     completed_at: Optional[datetime] = None
 
     session_exercise: SessionExercise = Relationship(back_populates="sets")
+
+
+# ============================================================
+# ROUTINE SHARE LINK
+# ============================================================
+class RoutineShareLink(SQLModel, table=True):
+    __tablename__ = "routine_share_links"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    token: str = Field(index=True, unique=True, max_length=12)
+    routine_id: int = Field(foreign_key="routines.id", index=True)
+    owner_id: int = Field(foreign_key="users.id", index=True)
+    created_at: datetime = Field(default_factory=utcnow)
+    uses: int = Field(default=0)

@@ -4,6 +4,9 @@ import { appHeader } from "../chrome.js";
 import { navigate } from "../router.js";
 import { pickExercise } from "../exercise_picker.js";
 
+// e1RM estimado (fórmula de Epley): permite comparar PRs entre distintos rangos de reps.
+const e1rm = (kg, reps) => (reps === 1 ? kg : kg * (1 + reps / 30));
+
 // ============================================================
 // TIMER DE DESCANSO
 // ============================================================
@@ -178,6 +181,16 @@ export async function render(container, { id }) {
     if (session && !session.finished_at) statTime.textContent = fmtDuration(session.started_at);
   }, 1000);
 
+  // Limpia el interval al salir de esta vista (bottom-nav, back del browser, etc.)
+  const onHashChange = () => {
+    if (location.hash !== `#/workout/${id}`) {
+      clearInterval(timerHandle);
+      clearRestTimer();
+      window.removeEventListener("hashchange", onHashChange);
+    }
+  };
+  window.addEventListener("hashchange", onHashChange);
+
   const refresh = async () => {
     try { session = await api.getSession(id); }
     catch (e) { toast(e.detail||"Error","error"); navigate("/routines"); return; }
@@ -207,7 +220,12 @@ export async function render(container, { id }) {
         if (prev) for (const s of prev.sets) if (s.completed&&s.kg!=null&&s.reps!=null) map[s.set_number]=`${s.kg}kg x ${s.reps}`;
         historyCache.set(exId, map);
         let best=0;
-        for (const se of hist) if (se.session_id!==session.id) for (const s of se.sets) if (s.completed&&s.kg!=null&&s.kg>best) best=s.kg;
+        for (const se of hist) if (se.session_id!==session.id) for (const s of se.sets) {
+          if (s.completed && s.kg!=null && s.kg>0 && s.reps!=null && s.reps>0) {
+            const e = e1rm(s.kg, s.reps);
+            if (e>best) best=e;
+          }
+        }
         prCache.set(exId, best);
       } catch { historyCache.set(exId,{}); prCache.set(exId,0); }
     }));
@@ -249,7 +267,7 @@ export async function render(container, { id }) {
 // ============================================================
 function renderExercise(se, refresh, historyCache, prCache, restConfig, notesCache, session) {
   const prevMap = historyCache.get(se.exercise.id)||{};
-  const bestKg = prCache.get(se.exercise.id)||0;
+  const bestE1rm = prCache.get(se.exercise.id)||0;
   const restSecs = restConfig.get(se.id)||0;
   const note = notesCache.get(se.id) ?? (se.note||"");
 
@@ -283,10 +301,23 @@ function renderExercise(se, refresh, historyCache, prCache, restConfig, notesCac
   });
 
   const rows = card.querySelector(".rows");
-  let prShown = false;
+  // PR: el set con mayor e1RM de la sesión que supera el récord histórico.
+  // Empates van al primer set (menor set_number).
+  let prSetId = null;
+  if (bestE1rm > 0) {
+    let prVal = bestE1rm;
+    for (const s of se.sets) {
+      if (s.completed && s.kg > 0 && s.reps > 0) {
+        const e = e1rm(s.kg, s.reps);
+        if (e > prVal) {
+          prVal = e;
+          prSetId = s.id;
+        }
+      }
+    }
+  }
   for (const s of se.sets) {
-    const isPR = !prShown && s.completed && s.kg>0 && bestKg>0 && s.kg>bestKg;
-    if (isPR) prShown = true;
+    const isPR = s.id === prSetId;
     rows.appendChild(renderSetRow(s, prevMap[s.set_number], refresh, isPR, se.id, restConfig));
   }
 

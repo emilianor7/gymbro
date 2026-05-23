@@ -13,7 +13,8 @@ export async function render(container, { id }) {
         <div id="exercises"></div>
         <button class="btn btn-block mt-4" id="add-ex">${icons.plus}<span>Agregar ejercicio</span></button>
         <button class="btn btn-primary btn-block mt-2" id="start">${icons.play}<span>Iniciar entrenamiento</span></button>
-        <button class="btn btn-ghost btn-block mt-4" id="del" style="color:var(--danger);">Eliminar rutina</button>
+        <button class="btn btn-block mt-4" id="share" style="background:var(--bg-elev-2);">🔗<span style="margin-left:8px;">Compartir rutina</span></button>
+        <button class="btn btn-ghost btn-block mt-2" id="del" style="color:var(--danger);">Eliminar rutina</button>
       </div>
     </div>
   `);
@@ -105,6 +106,53 @@ export async function render(container, { id }) {
       navigate("/routines");
     } catch (e) {
       toast(e.detail || "Error", "error");
+    }
+  });
+
+  view.querySelector("#share").addEventListener("click", async () => {
+    try {
+      const token = localStorage.getItem("gymbro_token");
+      const r = await fetch(`/share/routines/${id}`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail);
+
+      // mostrar sheet con el link
+      const { sheet } = await import("../ui.js");
+      const s = sheet({
+        title: "Compartir rutina",
+        body: el(`
+          <div>
+            <p style="font-size:13.5px;color:var(--text-muted);margin-bottom:16px;line-height:1.6;">
+              Cualquiera con este link puede importar una copia de la rutina a su cuenta.
+            </p>
+            <div style="background:var(--bg-input);border-radius:var(--radius);padding:12px 14px;
+              font-family:var(--font-mono);font-size:13px;word-break:break-all;margin-bottom:14px;color:var(--accent);">
+              ${data.url}
+            </div>
+            <button class="btn btn-primary btn-block" id="copy-link">Copiar link</button>
+            ${data.uses > 0 ? `<div style="text-align:center;font-size:12px;color:var(--text-faint);margin-top:10px;">${data.uses} persona${data.uses>1?'s':''} ya importaron esta rutina</div>` : ''}
+          </div>
+        `),
+      });
+      s.body.querySelector("#copy-link").addEventListener("click", () => {
+        navigator.clipboard.writeText(data.url).then(() => {
+          toast("Link copiado!", "success");
+        }).catch(() => {
+          // fallback para cuando clipboard no esta disponible
+          const input = document.createElement("input");
+          input.value = data.url;
+          document.body.appendChild(input);
+          input.select();
+          document.execCommand("copy");
+          document.body.removeChild(input);
+          toast("Link copiado!", "success");
+        });
+      });
+    } catch (e) {
+      toast(e.detail || "Error generando link", "error");
     }
   });
 
