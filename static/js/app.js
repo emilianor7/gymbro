@@ -8,6 +8,7 @@ import * as workout from "./views/workout.js";
 import * as entrenar from "./views/entrenar.js";
 import * as history from "./views/history.js";
 import * as profile from "./views/profile.js";
+import * as coach from "./views/coach.js";
 import * as importRoutine from "./views/import_routine.js";
 import * as exerciseDetail from "./views/exercise_detail.js";
 
