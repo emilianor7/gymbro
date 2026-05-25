@@ -1,5 +1,7 @@
+import re
+
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
@@ -89,9 +91,26 @@ if STATIC_DIR.exists():
 
     app.mount("/static", NoCacheStaticFiles(directory=STATIC_DIR), name="static")
 
+    def _static_version() -> str:
+        # mtime mas reciente de cualquier .js/.css como version global
+        candidates = list((STATIC_DIR / "js").rglob("*.js")) + list((STATIC_DIR / "css").rglob("*.css"))
+        if not candidates:
+            return "0"
+        return str(int(max(p.stat().st_mtime for p in candidates)))
+
+    _STATIC_REF_RE = re.compile(r'(["\'])(/static/[^"\']+?)\1')
+
     @app.get("/", include_in_schema=False)
     def root():
-        return FileResponse(STATIC_DIR / "index.html")
+        html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        v = _static_version()
+        # Cache-bust de las referencias /static/... directas en el HTML.
+        # Los imports relativos dentro de los JS se revalidan via ETag.
+        html = _STATIC_REF_RE.sub(
+            lambda m: f'{m.group(1)}{m.group(2)}?v={v}{m.group(1)}',
+            html,
+        )
+        return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
 
     @app.get("/favicon.ico", include_in_schema=False)
     def favicon():
