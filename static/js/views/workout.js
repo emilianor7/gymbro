@@ -318,11 +318,17 @@ function renderExercise(se, refresh, historyCache, prCache, restConfig, notesCac
   `);
 
   const noteEl = card.querySelector(".ex-note-input");
-  noteEl.style.height = noteEl.scrollHeight + "px";
-  noteEl.addEventListener("input", () => {
-    notesCache.set(se.id, noteEl.value);
+  const autosizeNote = () => {
     noteEl.style.height = "auto";
     noteEl.style.height = noteEl.scrollHeight + "px";
+  };
+  // El alto se calcula recien cuando el textarea esta en el DOM y maquetado;
+  // si se hace en este punto (nodo aun desprendido) scrollHeight da mal y la
+  // nota queda recortada en ~2 lineas. Por eso lo diferimos al siguiente frame.
+  requestAnimationFrame(autosizeNote);
+  noteEl.addEventListener("input", () => {
+    notesCache.set(se.id, noteEl.value);
+    autosizeNote();
   });
 
   const rows = card.querySelector(".rows");
@@ -454,7 +460,7 @@ function renderSetRow(s, prevText, refresh, isPR, seId, restConfig) {
   const row = el(`
     <div class="set-row ${completed?'completed':''}">
       <div class="num" style="cursor:pointer;color:${numColor};user-select:none;">${numDisplay}</div>
-      <div class="prev ${prevText?'':'empty'}">${esc(prevText||'')}</div>
+      <div class="prev ${prevText?'':'empty'}" style="${prevText?'cursor:pointer;':''}">${esc(prevText||'')}</div>
       <div><input class="set-input" type="number" inputmode="decimal" step="0.5" value="${kgVal}" placeholder="${kgPlaceholder}" data-field="kg"></div>
       <div><input class="set-input" type="number" inputmode="numeric" value="${repsVal}" placeholder="${repsPlaceholder}" data-field="reps"></div>
       <button class="check-btn">${icons.check}</button>
@@ -464,7 +470,18 @@ function renderSetRow(s, prevText, refresh, isPR, seId, restConfig) {
   const kgIn = row.querySelector('[data-field="kg"]');
   const repsIn = row.querySelector('[data-field="reps"]');
   const numEl = row.querySelector(".num");
+  const prevEl = row.querySelector(".prev");
   const checkBtn = row.querySelector(".check-btn");
+
+  // Tap en el valor anterior (gris) -> cargar esos kg/reps en los inputs
+  if (prevText) {
+    const m = prevText.match(/^([\d.]+)kg x (\d+)$/);
+    if (m) prevEl.addEventListener("click", () => {
+      if (s.completed) return;
+      kgIn.value = m[1];
+      repsIn.value = m[2];
+    });
+  }
 
   const persistOnBlur = async () => {
     if (!s.completed) return;
