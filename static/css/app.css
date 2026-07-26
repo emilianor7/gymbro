@@ -570,3 +570,72 @@ a { color: var(--accent); text-decoration: none; }
 .items-center { align-items: center; }
 .justify-between { justify-content: space-between; }
 .hidden { display: none !important; }
+
+/* ============================================================
+   SUPERSERIES
+   Bloque que envuelve 2+ cards que se hacen seguidos sin descanso.
+   ============================================================ */
+.ss-group {
+  border: 1px solid var(--accent);
+  border-left-width: 3px;
+  border-radius: var(--radius-lg);
+  background: var(--accent-bg);
+  padding: 10px 8px 1px;
+  margin-bottom: 14px;
+}
+.ss-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 8px;
+}
+.ss-badge {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--bg);
+  background: var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 3px 7px;
+}
+.ss-text {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+/* las cards de adentro pierden el margen de abajo del grupo */
+.ss-group > .card { margin-bottom: 8px; }
+.ss-group > .card:last-child { margin-bottom: 9px; }
+
+.ss-tag {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+}
+
+/* Nota del ejercicio en modo lectura (vista de rutina) */
+.ex-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--accent);
+  padding: 4px 0 2px;
+}
+.ex-meta svg { width: 14px; height: 14px; flex-shrink: 0; }
+.ex-note-read {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  padding: 6px 0 8px;
+  white-space: pre-wrap;
+}

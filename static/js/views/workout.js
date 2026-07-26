@@ -3,6 +3,7 @@ import { el, esc, icons, toast, confirm, fmtDuration } from "../ui.js";
 import { appHeader } from "../chrome.js";
 import { navigate } from "../router.js";
 import { pickExercise } from "../exercise_picker.js";
+import { groupSupersets, supersetWrapper, supersetTag, parseSuperset } from "../superset.js";
 
 // e1RM estimado (fórmula de Epley): permite comparar PRs entre distintos rangos de reps.
 const e1rm = (kg, reps) => (reps === 1 ? kg : kg * (1 + reps / 30));
@@ -211,11 +212,37 @@ export async function render(container, { id }) {
     if (firstActive && !techniqueOpen.has(firstActive.id)) {
       techniqueOpen.set(firstActive.id, true);
     }
+    await loadRestFromRoutine(session);
     exercisesEl.innerHTML = "";
-    for (const se of session.exercises)
-      exercisesEl.appendChild(renderExercise(se, refresh, historyCache, prCache, restConfig, notesCache, session, techniqueOpen));
+    for (const g of groupSupersets(session.exercises, se => notesCache.get(se.id) ?? (se.note||""))) {
+      const target = g.letter
+        ? exercisesEl.appendChild(supersetWrapper(g.letter, g.items.length))
+        : exercisesEl;
+      for (const se of g.items)
+        target.appendChild(renderExercise(se, refresh, historyCache, prCache, restConfig, notesCache, session, techniqueOpen));
+    }
     if (!session.exercises.length)
       exercisesEl.innerHTML = `<div class="empty-state"><div class="em-title">Sin ejercicios</div><div>Agregá uno para empezar</div></div>`;
+  };
+
+  // El descanso no se copia a la sesion (SessionExercise no tiene rest_seconds),
+  // asi que lo traemos de la rutina de origen la primera vez. Despues manda lo
+  // que el usuario elija a mano en el picker.
+  let restPrefilled = false;
+  const loadRestFromRoutine = async (sess) => {
+    if (restPrefilled || !sess.routine_id) return;
+    restPrefilled = true;
+    try {
+      const routine = await api.getRoutine(sess.routine_id);
+      const byExercise = new Map();
+      for (const re of routine.exercises)
+        if (!byExercise.has(re.exercise.id)) byExercise.set(re.exercise.id, re.rest_seconds);
+      for (const se of sess.exercises) {
+        if (restConfig.has(se.id)) continue;
+        const secs = byExercise.get(se.exercise.id);
+        if (secs != null) restConfig.set(se.id, secs);
+      }
+    } catch { /* si la rutina fue borrada, el descanso queda en manual */ }
   };
 
   const loadHistory = async (exs) => {
@@ -283,6 +310,11 @@ function renderExercise(se, refresh, historyCache, prCache, restConfig, notesCac
   const techOpen = techniqueOpen?.get(se.id) ?? false;
 
   const fmtRest = s => s===0?"APAGADO":s>=60?`${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`:`${s}s`;
+  // En una superserie el descanso 0 no es "apagado por defecto": es a proposito,
+  // hay que encadenar con el siguiente ejercicio.
+  const restLabel = (parseSuperset(note) && restSecs === 0)
+    ? "Sin descanso · seguí con el próximo"
+    : `Descanso: ${fmtRest(restSecs)}`;
 
   const techniqueBlock = hasImage ? `
     <div class="technique-section">
@@ -302,10 +334,11 @@ function renderExercise(se, refresh, historyCache, prCache, restConfig, notesCac
       <div class="card-header">
         <div class="ex-icon">${icons.dumbbell}</div>
         <div class="title">${esc(se.exercise.name)}</div>
+        ${supersetTag(note)}
         <button class="icon-btn dots-btn">${icons.dots}</button>
       </div>
       ${techniqueBlock}
-      <div class="rest-row" style="cursor:pointer;">${icons.timer}<span class="rest-label">Descanso: ${fmtRest(restSecs)}</span></div>
+      <div class="rest-row" style="cursor:pointer;">${icons.timer}<span class="rest-label">${restLabel}</span></div>
       <textarea class="ex-note-input" placeholder="Agregar notas aqui...">${esc(note)}</textarea>
       <div class="sets">
         <div class="sets-head">

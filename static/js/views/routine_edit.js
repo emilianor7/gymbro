@@ -3,6 +3,9 @@ import { el, esc, icons, toast, confirm } from "../ui.js";
 import { appHeader, bottomNav } from "../chrome.js";
 import { navigate } from "../router.js";
 import { pickExercise } from "../exercise_picker.js";
+import { groupSupersets, supersetWrapper, supersetTag, parseSuperset } from "../superset.js";
+
+const fmtRest = s => s >= 60 ? `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}` : `${s}s`;
 
 export async function render(container, { id }) {
   const view = el(`
@@ -42,8 +45,11 @@ export async function render(container, { id }) {
     metaEl.innerHTML = `<div class="muted" style="font-size:13px;">${routine.exercises.length} ejercicios · ${countSets(routine)} series</div>`;
 
     exercisesEl.innerHTML = "";
-    for (const re of routine.exercises) {
-      exercisesEl.appendChild(renderExerciseCard(re, refresh));
+    for (const g of groupSupersets(routine.exercises, re => re.note)) {
+      const target = g.letter
+        ? exercisesEl.appendChild(supersetWrapper(g.letter, g.items.length))
+        : exercisesEl;
+      for (const re of g.items) target.appendChild(renderExerciseCard(re, refresh));
     }
     if (routine.exercises.length === 0) {
       exercisesEl.innerHTML = `<div class="empty-state"><div class="em-title">Vacia</div><div>Agregá ejercicios para empezar</div></div>`;
@@ -164,13 +170,25 @@ function countSets(routine) {
 }
 
 function renderExerciseCard(re, refresh) {
+  // La nota se muestra en modo lectura: es la indicacion tecnica del plan.
+  // Se edita en la sesion en vivo. Al prefijo "SUPERSERIE A1" ya lo representa
+  // el badge del bloque, asi que no lo repetimos.
+  const ss = parseSuperset(re.note);
+  const noteText = ss ? ss.rest : (re.note || "");
+  const meta = [];
+  if (re.rest_seconds > 0) meta.push(`Descanso ${fmtRest(re.rest_seconds)}`);
+  else if (ss) meta.push("Sin descanso · encadenar");
+
   const card = el(`
     <div class="card">
       <div class="card-header">
         <div class="ex-icon">${icons.dumbbell}</div>
         <div class="title">${esc(re.exercise.name)}</div>
+        ${supersetTag(re.note)}
         <button class="icon-btn" data-action="remove">${icons.trash}</button>
       </div>
+      ${meta.length ? `<div class="ex-meta">${icons.timer}<span>${meta.join(" · ")}</span></div>` : ""}
+      ${noteText.trim() ? `<div class="ex-note-read">${esc(noteText.trim())}</div>` : ""}
 
       <div class="sets">
         <div class="sets-head">
