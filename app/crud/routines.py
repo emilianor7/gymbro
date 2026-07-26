@@ -171,6 +171,7 @@ def remove_exercise_from_routine(db: Session, routine_exercise_id: int, owner_id
     for s in siblings:
         s.order_index -= 1
         db.add(s)
+        db.flush()
     routine.updated_at = _utcnow()
     db.add(routine)
     db.commit()

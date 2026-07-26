@@ -12,3 +12,4 @@ app/crud/sessions.py
 app/api/routers/sessions.py
 ia.sh
 import_rutines.py
+logs/
